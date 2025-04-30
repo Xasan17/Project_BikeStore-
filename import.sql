@@ -256,3 +256,31 @@ inner join orders o on c.customer_id = o.customer_id
 inner join order_items oi on oi.order_id = o.order_id
 group by c.customer_id, c.first_name, c.last_name;
 end;
+
+
+----1 View
+--vw_StoreSalesSummary: Revenue, #Orders, AOV per store
+create view	vw_StoreSalesSummary
+as
+	select s.store_name, COUNT(distinct oi.order_id) as Number_of_orders, 
+		sum(quantity*list_price-discount) as Revenue, 
+		round(sum(quantity*list_price-discount)/COUNT(distinct oi.order_id), 2) as AOV 
+	from order_items oi join orders o on oi.order_id=o.order_id 
+	join stores s on o.store_id=s.store_id
+	where shipped_date is not null
+	group by s.store_name;
+
+
+--1 Stored Procedures
+--•	sp_CalculateStoreKPI: Input store ID, return full KPI breakdown
+create proc sp_CalculateStoreKPI 
+		@store_id int
+as
+begin
+	select @store_id as store_id, 
+	COUNT(distinct oi.order_id) as Number_0f_orders, sum(quantity*list_price-discount) as revenue, 
+	round(sum(quantity*list_price-discount)/COUNT(distinct oi.order_id), 2) as AOV
+	from order_items oi join orders o on oi.order_id=o.order_id 
+	join stores s on o.store_id=s.store_id
+	where  o.store_id = @store_id;
+	end
