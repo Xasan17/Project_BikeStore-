@@ -224,3 +224,35 @@ with (
     TABLOCK
 );
 
+
+
+
+--4 View
+--vw_StaffPerformance
+create view vw_StaffPerformance 
+as
+select s.first_name, s.last_name,count(distinct o.order_id) as orders_handled , sum(quantity*list_price*(1-discount)) as revenue from staffs s
+inner join orders o on s.staff_id = o.staff_id
+inner join order_items oi on oi.order_id = o.order_id
+group by s.first_name, s.last_name;
+
+--4 Stored Procedures 
+--sp_GetCustomerProfile
+create proc sp_GetCustomerProfile
+as 
+begin
+select  c.first_name, 
+		c.last_name,
+		sum(quantity*list_price*(1-discount)) as total_spend, 
+		count(distinct o.order_id) as orders , 
+		(select top 1 p.product_name from customers c1
+		join orders o on c1.customer_id = o.customer_id
+		join order_items oi on oi.order_id = o.order_id
+		join products p on p.product_id = oi.product_id
+		where c1.customer_id = c.customer_id
+		group by p.product_name
+		order by sum(oi.quantity) desc ) as most_bought_item   from customers c
+inner join orders o on c.customer_id = o.customer_id
+inner join order_items oi on oi.order_id = o.order_id
+group by c.customer_id, c.first_name, c.last_name;
+end;
