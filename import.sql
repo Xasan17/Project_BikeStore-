@@ -271,6 +271,24 @@ as
 	group by s.store_name;
 
 
+--2. •	vw_TopSellingProducts: Rank products by total sales
+
+	create view vw_TopSellingProducts as
+	select 
+	    p.product_id,
+	    p.product_name,
+	    SUM(oi.quantity) as total_quantity_sold,
+	    SUM(oi.quantity * (oi.list_price - oi.discount)) as total_sales_amount,
+	    RANK() over (order by SUM(oi.quantity * (oi.list_price - oi.discount)) desc) as sales_rank
+	from order_items oi
+	join products p on oi.product_id = p.product_id
+	group by p.product_id, p.product_name;
+	
+	select * from vw_TopSellingProducts;
+
+	
+
+
 --1 Stored Procedures
 --•	sp_CalculateStoreKPI: Input store ID, return full KPI breakdown
 create proc sp_CalculateStoreKPI 
@@ -284,3 +302,33 @@ begin
 	join stores s on o.store_id=s.store_id
 	where  o.store_id = @store_id;
 	end
+
+--2. sp_GenerateRestockList: Output low-stock items per store
+
+		create procedure sp_GenerateRestockList
+		    @MinQty int = 10
+		as
+		begin
+		    select 
+		        s.store_id,
+		        st.store_name,
+		        p.product_id,
+		        p.product_name,
+		        s.quantity as current_quantity
+		    from stocks s
+		    join products p on s.product_id = p.product_id
+		    join stores st on s.store_id = st.store_id
+		    where s.quantity < @MinQty
+		    order by s.store_id, p.product_name;
+		end;
+		
+		
+		exec sp_GenerateRestockList;
+		
+		
+				
+
+
+
+
+
