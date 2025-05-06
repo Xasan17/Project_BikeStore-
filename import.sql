@@ -40,7 +40,9 @@ create table staging_products (
 	brand_id int,
 	category_id int,
 	model_year int,
-	list_price DECIMAL(10, 2));
+	list_price DECIMAL(10, 2),
+	cost_price DECIMAL(10, 2));
+
 --1.6
 create table staging_staffs (
     staff_id int primary key,
@@ -209,6 +211,7 @@ create table products (
 	category_id int,
 	model_year int,
 	list_price DECIMAL(10, 2),
+	cost_price DECIMAL(10, 2),
 
 	CONSTRAINT FK_products_category_id
     FOREIGN KEY (category_id)
@@ -313,8 +316,8 @@ insert into stores (store_id,store_name,phone,email,street,city,state,zip_code)
 insert into customers (customer_id,first_name,last_name,phone,email,street,city,state,zip_code)
 	select customer_id,first_name,last_name,phone,email,street,city,state,zip_code from staging_customers;
 --4.5
-insert into products (product_id,product_name,brand_id,category_id,model_year,list_price)
-	select product_id,product_name,brand_id,category_id,model_year,list_price from staging_products;
+insert into products (product_id,product_name,brand_id,category_id,model_year,list_price,cost_price)
+	select product_id,product_name,brand_id,category_id,model_year,list_price, cost_price from staging_products;
 --4.6
 insert into staffs (staff_id,first_name,last_name,email,phone,active,store_id,manager_id )
 	select staff_id,first_name,last_name,email,phone,active,store_id,manager_id  from staging_staffs;
@@ -327,119 +330,3 @@ insert into order_items (order_id,item_id,product_id,quantity,list_price,discoun
 --4.9
 insert into stocks (store_id,product_id,quantity) 
 	select store_id,product_id,quantity from staging_stocks;
---3  View
---3.1
---vw_StoreSalesSummary: Revenue, #Orders, AOV per store
-create view	vw_StoreSalesSummary
-as
-	select s.store_name, COUNT(distinct oi.order_id) as Number_of_orders, 
-		sum(quantity*list_price-discount) as Revenue, 
-		round(sum(quantity*list_price-discount)/COUNT(distinct oi.order_id), 2) as AOV 
-	from order_items oi join orders o on oi.order_id=o.order_id 
-	join stores s on o.store_id=s.store_id
-	where shipped_date is not null
-	group by s.store_name;
---3.2
---	vw_TopSellingProducts: Rank products by total sales
-create view vw_TopSellingProducts 
-	as
-	select 
-	    p.product_id,
-	    p.product_name,
-	    SUM(oi.quantity) as total_quantity_sold,
-	    SUM(oi.quantity * (oi.list_price - oi.discount)) as total_sales_amount,
-	    RANK() over (order by SUM(oi.quantity * (oi.list_price - oi.discount)) desc) as sales_rank
-	from order_items oi
-	join products p on oi.product_id = p.product_id
-	group by p.product_id, p.product_name;
-
---3.3
---Sanjar
---3.4
---vw_StaffPerformance
-create view vw_StaffPerformance 
-as
-select s.first_name, s.last_name,count(distinct o.order_id) as orders_handled , sum(quantity*list_price*(1-discount)) as revenue from staffs s
-inner join orders o on s.staff_id = o.staff_id
-inner join order_items oi on oi.order_id = o.order_id
-group by s.first_name, s.last_name;
---3.5
---Abduvohid
---3.6
---Xasan
-
---4
---4.1
---sp_CalculateStoreKPI: Input store ID, return full KPI breakdown
-create proc sp_CalculateStoreKPI 
-		@store_id int
-as
-begin
-	select @store_id as store_id, 
-	COUNT(distinct oi.order_id) as Number_0f_orders, sum(quantity*list_price-discount) as revenue, 
-	round(sum(quantity*list_price-discount)/COUNT(distinct oi.order_id), 2) as AOV
-	from order_items oi join orders o on oi.order_id=o.order_id 
-	join stores s on o.store_id=s.store_id
-	where  o.store_id = @store_id;
-	end;
---4.2
---sp_GenerateRestockList: Output low-stock items per store
-create procedure sp_GenerateRestockList
-		    @MinQty int = 10
-		as
-		begin
-		    select 
-		        s.store_id,
-		        st.store_name,
-		        p.product_id,
-		        p.product_name,
-		        s.quantity as current_quantity
-		    from stocks s
-		    join products p on s.product_id = p.product_id
-		    join stores st on s.store_id = st.store_id
-		    where s.quantity < @MinQty
-		    order by s.store_id, p.product_name;
-		end;
---4.3
---Sanjar
---4.4
-create proc sp_GetCustomerProfile
-as 
-begin
-select  c.first_name, 
-		c.last_name,
-		sum(quantity*list_price*(1-discount)) as total_spend, 
-		count(distinct o.order_id) as orders , 
-		(select top 1 p.product_name from customers c1
-		join orders o on c1.customer_id = o.customer_id
-		join order_items oi on oi.order_id = o.order_id
-		join products p on p.product_id = oi.product_id
-		where c1.customer_id = c.customer_id
-		group by p.product_name
-		order by sum(oi.quantity) desc ) as most_bought_item   from customers c
-inner join orders o on c.customer_id = o.customer_id
-inner join order_items oi on oi.order_id = o.order_id
-group by c.customer_id, c.first_name, c.last_name;
-end;
-
---5 KPI
-
-
---6 Automation
-create proc staging_categories
-	as
-	begin
-		create table #categories (
-		category_id int,
-		category_name varchar(50));
-		insert into #categories
-		select category_id, category_name
-			from openrowset (
-			BULK 'C:\Bikestore\categories.csv',
-			FORMAT = 'CSV',
-			FIRSTROW = 2  
-			) AS DataFile ;
-			insert into categories (category_id, category_name)
-			select category_id, category_name
-			from #categories;
-		end ;
