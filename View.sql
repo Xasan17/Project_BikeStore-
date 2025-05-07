@@ -5,7 +5,7 @@ create view	vw_StoreSalesSummary
 as
 	select s.store_name, COUNT(distinct oi.order_id) as Number_of_orders, 
 		sum(quantity*list_price*(1-coalesce(discount,2))) as Revenue, 
-		cast(sum(quantity*list_price*coalesce(discount,2))/COUNT(distinct oi.order_id) as decimal(18,2)) as AOV 
+		cast(sum(quantity*list_price*(1-coalesce(discount,2)))/COUNT(distinct oi.order_id) as decimal(18,2)) as AOV 
 	from order_items oi join orders o on oi.order_id=o.order_id 
 	join stores s on o.store_id=s.store_id
 	where shipped_date is not null
@@ -23,6 +23,8 @@ create view vw_TopSellingProducts
 	    RANK() over (order by SUM(oi.quantity * (oi.list_price - oi.discount)) desc) as sales_rank
 	from order_items oi
 	join products p on oi.product_id = p.product_id
+	join orders o on o.order_id = oi.order_id 
+	where shipped_date is not null
 	group by p.product_id, p.product_name;
 
 --3.3
@@ -40,9 +42,18 @@ as
 select s.first_name, s.last_name,count(distinct o.order_id) as orders_handled , sum(quantity*list_price*(1-discount)) as revenue from staffs s
 inner join orders o on s.staff_id = o.staff_id
 inner join order_items oi on oi.order_id = o.order_id
+where o.shipped_date is not null
 group by s.first_name, s.last_name;
 --3.5
---Abduvohid
+create view	vw_RegionalTrends
+as
+	select c.state, COUNT(distinct oi.order_id) as Number_of_orders, 
+		sum(quantity*list_price*(1-coalesce(discount,2))) as Revenue 
+	from order_items oi 
+	join orders o on oi.order_id=o.order_id 
+	join customers c on c.customer_id=o.customer_id
+	where shipped_date is not null
+	group by c.state;
 --3.6
 create view vw_SalesByCategory 
 as
@@ -56,6 +67,8 @@ select
 from categories c
 inner join  products p on p.category_id = c.category_id 
 inner join order_items ot on p.product_id = ot.product_id
+inner join orders o on o.order_id = ot.order_id
+where o.shipped_date is not null
 group by c.category_id,  c.category_name;
 
 --3.7
@@ -71,6 +84,7 @@ select
 		count(distinct o.order_id) as Count_orders   from customers c
 inner join orders o on c.customer_id = o.customer_id
 inner join order_items oi on oi.order_id = o.order_id 
+where o.shipped_date is not null
 group by c.customer_id, c.first_name, c.last_name;
 --3.8
 create view vw_store_stock_ratio 
@@ -108,6 +122,7 @@ from stores s
 inner join orders o on s.store_id = o.store_id
 inner join order_items ot on ot.order_id = o.order_id
 inner join  products p on p.product_id = ot.product_id
+where o.shipped_date is not null
 group by s.store_id, s.store_name;
 
 --3.10
@@ -123,6 +138,8 @@ select
 	from brands b
 inner join products p on b.brand_id = p.brand_id
 inner join order_items oi on oi.product_id = p.product_id
+inner join orders o on o.order_id = oi.order_id
+where o.shipped_date is not null
 group by b.brand_id, brand_name;
 --3.11
 create view vw_staff_summary_sales
@@ -136,4 +153,5 @@ select
 from staffs s
 inner join orders o on o.staff_id = s.staff_id
 inner join order_items oi on o.order_id = oi.order_id
+where o.shipped_date is not null
 group by s.staff_id,s.first_name,s.last_name;
